@@ -48,3 +48,6 @@ bash: sudo apt-get install libncursesw5-dev libsodium-dev libfmt-dev
   - *安全限制：僅能返回至程序啟動時的初始目錄，防止越權訪問。*
 - **`F1`**：**新建文件** —— 快速在當前目錄下創建新檔案。
 - **`F2`**：**新建文件夾** —— 快速建立新的目錄結構。
+
+## ⚖️ 許可證 (License)
+本項目採用 MIT License。
