@@ -232,7 +232,6 @@ namespace Crypto_Impl{
         return;
 
         SFBoolState_Failed:
-        //log
         return;
     }
     inline void Crypto_Folder_Temporary_Recursive(const Crypto_Operate_Info object_info){
@@ -260,9 +259,13 @@ inline void Crypto_Interface(const std::string crypto_type,const std::filesystem
         Crypto_Impl::Crypto_Operate_Info object_info{DecStore,source_file,password,true};
         Crypto_File_Formate_Select(Crypto_Type::Dec,object_info);
     }else if (crypto_type=="Tmp") {
-        if(source_file.extension()==".gz") {Terminal_Error_Ring();return;}
+        if(auto copy=source_file; std::filesystem::is_regular_file(source_file)&&source_file.extension()==".vlt")
+            if(auto p=copy.replace_extension(); p.extension()==".gz")
+                if(auto pp=p.replace_extension(); pp.extension()==".tar")
+                {Terminal_Error_Ring();return;}
         Crypto_Impl::Crypto_Operate_Info object_info{DecStore,source_file,password,true};
         if (std::filesystem::is_regular_file(source_file)) Crypto_Impl::Crypto_File_Temporary(object_info);
         else Crypto_Impl::Crypto_Folder_Temporary_Recursive(object_info);
     }
 }
+
