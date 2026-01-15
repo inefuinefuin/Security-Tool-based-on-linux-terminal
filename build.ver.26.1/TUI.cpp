@@ -5,216 +5,272 @@
 #include "Core.hpp"
 #include "Compress.hpp"
 #include <ncursesw/ncurses.h>
+
 #include <string_view>
 #include <string>
 #include <filesystem>
 #include <optional>
+#include <stack>
 
-#define TXTNUM 7
-constexpr std::string_view Terminal_Screen_Text[] = {
-    "Security File Manager Tool",
+#define Main_Menu 4
+#define Crypto_Menu_Num 6
+#define Shell_Menu_Num 2
+#define Tar_Menu_Num 2
+// ===== Terminal Screen Texts =====
+std::string TUI_Title = "Security File Manager Tool";
+const std::string Menu[Main_Menu] = {
+    "Crypto Tool",
+    "File Manager TUI",
+    "Shell Tool",
+    "Tar Tool",
+};
+const std::string Crypto_Menu[Crypto_Menu_Num] = {
     "Encrypt",
     "Decrypt",
-    "Temporary",
-    "File Manager TUI",
-    "File Manager SHELL",
+    "Temporary Decrypt",
+    "Compress&Encrypt",
+    "Decrypt&Decompress",
+    "Temporary Decompress&Decrypt",
+};
+const std::string Shell_Menu[Shell_Menu_Num] = {
+    "Simply SHELL",
+    "System Shell",
+};
+const std::string Tar_Menu[Tar_Menu_Num] = {
     "Tar Compress",
     "Tar Decompress",
 };
-
-class Terminal_Screen_Draw {
-    mutable int vlm_cur_row = 1;
-    void Title_Draw() const {
-        mvaddstr(0,0,Terminal_Screen_Text[0].data());
+enum class Menu_Option {Main,Crypto,Shell,Tar,};
+const std::string* Menu_Array_Match[] = {Menu,Crypto_Menu,Shell_Menu,Tar_Menu,};
+constexpr int Menu_Match(Menu_Option option) {
+    switch (option){
+        case Menu_Option::Main: return Main_Menu;
+        case Menu_Option::Crypto: return Crypto_Menu_Num;
+        case Menu_Option::Shell: return Shell_Menu_Num;
+        case Menu_Option::Tar: return Tar_Menu_Num;
+        default: return 0;
     }
-    void Entry_Draw(const int ch) const {
-        [&] {
-            if (ch==-1) return;
-            if (ch==KEY_UP) {
-                if(vlm_cur_row>1)
-                    vlm_cur_row--;
-                else Terminal_Error_Ring();
-            }else if (ch==KEY_DOWN) {
-                if (vlm_cur_row<TXTNUM)
-                    vlm_cur_row++;
-                else Terminal_Error_Ring();
-            }
-        }();
-        for (int i=1;i<=TXTNUM;i++) {
-            mvaddstr(i,0,Terminal_Screen_Text[i].data());
-            if (i==vlm_cur_row) mvaddch(vlm_cur_row,Terminal_Screen_Text[i].size(),' '|A_STANDOUT);
+}
+
+std::optional<std::filesystem::path> TUI_KidWin_InPath() {
+    std::wstring raw_path=L"";
+    int win_height = 1, win_pos = LINES - 1;
+    WINDOW* win = TUI_KidWin_Components::KidWin_Create(win_height,COLS,win_pos,0);
+    WINDOW* backup = TUI_KidWin_Components::KidWin_Backup_LastLine(stdscr,win_pos);
+
+    int tmp_len = raw_path.size();
+    while(true){
+        werase(win);
+        std::wstring show_string = L"$Path$"+raw_path;
+        mvwaddwstr(win,0,0,show_string.data());
+        mvwaddch(win,0,WString_Cols_Count(show_string),L' '|A_STANDOUT);
+        wrefresh(win);
+
+        wint_t wch;
+        int result = get_wch(&wch);
+        if(wch==ESC) {
+            TUI_KidWin_Components::KidWin_Restore(backup, stdscr);
+            TUI_KidWin_Components::KidWin_Destroy(win);
+            return std::nullopt;
         }
-    }
-
-    std::optional<std::filesystem::path> Input_Gain_Path() const {
-        std::wstring raw_path=L"";
-        int child_win_height = 1, child_win_pos = LINES - child_win_height;
-        WINDOW* win = newwin(child_win_height,COLS,child_win_pos,0);
-        keypad(win,TRUE);
-        WINDOW* backup = newwin(1,COLS,0,0);
-        copywin(stdscr,backup,child_win_pos,0,0,0,0,COLS-1,0);
-
-        start_color();
-        init_pair(1,COLOR_RED,COLOR_WHITE);
-        wbkgd(win,COLOR_PAIR(1)); wattron(win,COLOR_PAIR(1));
-
-        int tmp_len = raw_path.size();
-        while(true){
-            werase(win);
-            std::wstring show_string = L"$Path$"+raw_path;
-            mvwaddwstr(win,0,0,show_string.data());
-            mvwaddch(win,0,WString_Cols_Count(show_string),L' '|A_STANDOUT);
-            wrefresh(win);
-
-            wint_t wch;
-            int result = get_wch(&wch);
-            if(wch==KEY_BACKSPACE){
-                if(tmp_len!=0) {
-                    tmp_len--;
-                    raw_path.pop_back();
-                }
-            }
-
-            if(wch==ENTER) break;
-            if(wch==ESC) goto ESC_LABEL;
-            if(result==OK){
-                raw_path+=static_cast<wchar_t>(wch);
-                tmp_len++;
+        if(wch==ENTER) break;
+        if(wch==KEY_BACKSPACE){
+            if(tmp_len!=0) {
+                tmp_len--;
+                raw_path.pop_back();
             }
         }
-
-        overwrite(backup,stdscr);
-        delwin(win);
-        // return raw_path;
-        if(File_Path_Correct_Make(raw_path) == std::nullopt) {return std::nullopt;}
-        else {return *File_Path_Correct_Make(raw_path);}
-
-        ESC_LABEL:
-        overwrite(backup,stdscr);
-        delwin(win);
-        return std::nullopt;
+        if(result==OK){
+            raw_path+=static_cast<wchar_t>(wch);
+            tmp_len++;
+        }
     }
-    std::string Input_Gain_Password() const {
-        std::string raw_pwd="";
-        int child_win_height = 1, child_win_pos = LINES - child_win_height;
-        WINDOW* win = newwin(child_win_height,COLS,child_win_pos,0);
-        keypad(win,TRUE);
-        WINDOW* backup = newwin(1,COLS,0,0);
-        copywin(stdscr,backup,child_win_pos,0,0,0,0,COLS-1,0);
+    TUI_KidWin_Components::KidWin_Restore(backup, stdscr);
+    TUI_KidWin_Components::KidWin_Destroy(win);
 
-        start_color();
-        init_pair(1,COLOR_RED,COLOR_WHITE);
-        wbkgd(win,COLOR_PAIR(1)); wattron(win,COLOR_PAIR(1));
+    auto [target_path,ec] = Input_Path_Check_Abs(raw_path);
+    return ec ? std::nullopt : std::optional<std::filesystem::path>{target_path};
+}
+std::string TUI_KidWin_inPwd() {
+    auto hide_password = [](int for_time){
+        std::string show_string = "$Password$";
+        for(int i=0;i<for_time;i++)
+            show_string+="*";
+        return show_string;
+    };
 
-        int tmp_len = raw_pwd.size();
-        auto hide_password = [&]{
-            std::string show_string = "$Password$";
-            for(int i=0;i<tmp_len;i++)
-                show_string+="*";
-            return show_string;
-        };
-        while(true){
-            werase(win);
-            std::string show_string = hide_password();
-            mvwaddstr(win,0,0,show_string.data());
-            mvwaddch(win,0,show_string.size(),' '|A_STANDOUT);
-            wrefresh(win);
+    std::string raw_pwd="";
+    int win_height = 1, win_pos = LINES - 1;
+    WINDOW* win = TUI_KidWin_Components::KidWin_Create(win_height,COLS,win_pos,0);
+    WINDOW* backup = TUI_KidWin_Components::KidWin_Backup_LastLine(stdscr,win_pos);
+    
+    int tmp_len = raw_pwd.size();
+    while(true){
+        werase(win);
+        std::string show_string = hide_password(tmp_len);
+        mvwaddstr(win,0,0,show_string.data());
+        mvwaddch(win,0,show_string.size(),' '|A_STANDOUT);
+        wrefresh(win);
 
-            wint_t wch;
-            int result = get_wch(&wch);
-            if(wch==KEY_BACKSPACE){
-                if(tmp_len!=0) {
-                    tmp_len--;
-                    raw_pwd.pop_back();
-                }
-            }
-
-            if(wch==ENTER) break;
-            if(wch==ESC) goto ESC_LABEL;
-            if(result==OK){
-                raw_pwd+=wch;
-                tmp_len++;
+        wint_t wch;
+        int result = get_wch(&wch);
+        if(wch==ESC){
+            TUI_KidWin_Components::KidWin_Restore(backup, stdscr);
+            TUI_KidWin_Components::KidWin_Destroy(win);
+            return "";
+        }
+        if(wch==ENTER) break;
+        if(wch==KEY_BACKSPACE){
+            if(tmp_len!=0) {
+                tmp_len--;
+                raw_pwd.pop_back();
             }
         }
+        if(result==OK){
+            raw_pwd+=wch;
+            tmp_len++;
+        }
+    }
+    TUI_KidWin_Components::KidWin_Restore(backup, stdscr);
+    TUI_KidWin_Components::KidWin_Destroy(win);
+    return raw_pwd;
+}
 
-        overwrite(backup,stdscr);
-        delwin(win);
-        return raw_pwd;
 
-        ESC_LABEL:
-        overwrite(backup,stdscr);
-        delwin(win);
-        return "";
+void TUI_Title_Draw(const std::string show_str){
+    mvaddstr(0,0,show_str.data()); refresh();
+}
+void TUI_Menu_Draw(const Screen_Row_Info& scrl,const int for_time,const std::string* menu){
+    int scrl_cur_y = scrl.fix+scrl.offset;
+    int scrl_bp_idx = scrl.bp-scrl.fix;
+    int scrl_cur_idx = scrl_bp_idx+scrl.offset;
+
+    for(int idx=scrl_bp_idx; idx<scrl_bp_idx+for_time; idx++){
+        int for_offset = idx - scrl_bp_idx;
+        std::string entry = menu[idx];
+        mvaddstr(scrl.fix+for_offset,0,entry.data());
+        if(idx==scrl_cur_idx){mvaddch(scrl_cur_y,entry.size(),' '|A_STANDOUT);}
+    }
+}
+class TUI_Main_Screen_Draw{
+    Screen_Row_Info scrl{1,1,0,-1,-1};
+    Menu_Option current_menu;
+
+    void Menu_Entry_Draw(const int ch) {
+        scrl.total = Menu_Match(current_menu); scrl.vsb = LINES-1;
+
+        Scroll_Event_Response(scrl,ch);
+
+        int scrl_total_To_bp_len = scrl.total+(scrl.fix-1)-scrl.bp+1;
+        if(scrl_total_To_bp_len<=scrl.vsb) TUI_Menu_Draw(scrl,scrl_total_To_bp_len,Menu_Array_Match[static_cast<int>(current_menu)]);
+        else TUI_Menu_Draw(scrl,scrl.vsb,Menu_Array_Match[static_cast<int>(current_menu)]);
+
+        refresh();
     }
 
-    void Choice_Map() const {
-        if(vlm_cur_row==1){
-            auto target_path = Input_Gain_Path(); refresh();
-            auto pwd = Input_Gain_Password(); refresh();
+    void Menu_Chain_Map() const {
+        int scroll_idx = scrl.bp - scrl.fix + scrl.offset;
+        if(current_menu==Menu_Option::Main) {
+            Menu_Option selected_option;
+            switch(scroll_idx){
+                case 0: selected_option = Menu_Option::Crypto; break;
+                case 1: Terminal_MountCurrentTUI_LaunchNewTUI(Terminal_FileManager_Interface,std::filesystem::current_path()); return;
+                case 2: selected_option = Menu_Option::Shell; break;
+                case 3: selected_option = Menu_Option::Tar; break;
+                default: return;
+            }
+            menu_chain.push(*this); temp_menu = selected_option;
+        }else if(current_menu==Menu_Option::Crypto) {
+            std::string crypto_type;
+            switch(scroll_idx){
+                case 0: crypto_type = "Enc"; break;
+                case 1: crypto_type = "Dec"; break;
+                case 2: crypto_type = "Tmp"; break;
+                case 3: crypto_type = "TarEnc"; break;
+                case 4: crypto_type = "TarDec"; break;
+                case 5: crypto_type = "TarTmp"; break;
+                default: return;
+            }
+            auto target_path = TUI_KidWin_InPath();
+            auto pwd = TUI_KidWin_inPwd();
             if(target_path!=std::nullopt&&pwd!="")
-                Crypto_Interface("Enc",*target_path,pwd);
+                Crypto_TUI_Interface(crypto_type,*target_path,pwd);
             else Terminal_Error_Ring();
-        }else if(vlm_cur_row==2){
-            auto target_path = Input_Gain_Path(); refresh();
-            auto pwd = Input_Gain_Password(); refresh();
-            if(target_path!=std::nullopt&&(*target_path).extension()==".vlt"&&pwd!="")
-                Crypto_Interface("Dec",*target_path,pwd);
-            else Terminal_Error_Ring();
-        }else if(vlm_cur_row==3){
-            auto target_path = Input_Gain_Path(); refresh();
-            auto pwd = Input_Gain_Password(); refresh();
-            if(target_path!=std::nullopt&&pwd!="")
-                Crypto_Interface("Tmp",*target_path,pwd);
-            else Terminal_Error_Ring();
-        }else if(vlm_cur_row==4){
-            Terminal_Template_Current_MountTemporary_NewTUI_Launch(Terminal_FileManager_Interface,std::filesystem::current_path());
-        }else if(vlm_cur_row==5){
-            Terminal_Template_Current_MountTemporary_NewTUI_Launch(Terminal_Shell_Interface,std::filesystem::current_path());
-        }else if(vlm_cur_row==6){
-            auto target_path = Input_Gain_Path(); refresh();
-            if(target_path!=std::nullopt)
+        }else if(current_menu==Menu_Option::Shell) {
+            if(scroll_idx==0) {
+                Terminal_MountCurrentTUI_LaunchNewTUI(Terminal_Shell_Interface,std::filesystem::current_path());
+            }else if(scroll_idx==1) {
+                Terminal_MountCurrentTUI_LaunchNewTUI(System_Shell_Interface,std::filesystem::current_path());
+            }else return;
+        }else if(current_menu==Menu_Option::Tar) {
+            auto target_path = TUI_KidWin_InPath();
+            if(target_path==std::nullopt||!std::filesystem::exists(*target_path)) {
+                Terminal_Error_Ring(); return;
+            }
+            if(scroll_idx==0) {
                 Compress_Interface("Compress",*target_path);
-            else Terminal_Error_Ring();
-        }else if(vlm_cur_row==7){
-            auto target_path = Input_Gain_Path(); refresh();
-            if(target_path!=std::nullopt)
+            }else if(scroll_idx==1) {
                 Compress_Interface("Decompress",*target_path);
-            else Terminal_Error_Ring();
+            }else return;
         }
+        return;
     }
 public:
-    void Main_Graphic_Draw(const int ch) const {
+    inline static std::stack<TUI_Main_Screen_Draw> menu_chain;
+    inline static std::optional<Menu_Option> temp_menu = std::nullopt;
+    explicit TUI_Main_Screen_Draw(Menu_Option menu_option): current_menu(menu_option){}
+    TUI_Main_Screen_Draw operator=(const TUI_Main_Screen_Draw & object) {
+        if (this==&object) return *this;
+        this->current_menu = object.current_menu;
+        this->scrl = object.scrl;
+        return *this;
+    }
+    void Main_Graphic_Draw(const int ch) {
         clear();
-        Title_Draw();
-        Entry_Draw(ch);
-        refresh();
-        if (ch==ENTER) {
-            Choice_Map();
+        TUI_Title_Draw(TUI_Title);
+        Menu_Entry_Draw(ch);
+        
+        if(ch==ENTER){
+            Menu_Chain_Map();
             refresh();
         }
+
     }
+
 };
 
-inline void Terminal_Screen_Event_Main_Cycle() {
-    initscr();
-    noecho(); cbreak(); keypad(stdscr,TRUE); curs_set(0); set_escdelay(25);
-    bool main_event_cycle = true, screen_size_state = false;
-    Terminal_Screen_Draw main_object;
-    while (main_event_cycle) {
+
+// ===== Terminal Main Event Cycle =====
+inline void TUI_Main_Event_Cycle() {
+    setlocale(LC_ALL, ""); initscr(); noecho(); cbreak(); keypad(stdscr,TRUE); curs_set(0); set_escdelay(25);
+
+    TUI_Main_Screen_Draw main_object(Menu_Option::Main);
+    bool screen_size_state = false;
+    while (true) {
         Terminal_Screen_yx_Size initial = Terminal_yx_Size_Monitor();
-        if (!screen_size_state) {
-            main_object.Main_Graphic_Draw(KINT);
-        }
+        if (!screen_size_state) main_object.Main_Graphic_Draw(KINT);
+
         int ch = getch();
         if (Terminal_Screen_yx_Size monitor = Terminal_yx_Size_Monitor(); monitor!=initial) {
             screen_size_state = true; main_object.Main_Graphic_Draw(KINT);
         }
-        if (ch==ENTER||ch==KEY_UP||ch==KEY_DOWN) main_object.Main_Graphic_Draw(ch);
         if (ch==ESC||ch=='q') break;
+        if (ch==ENTER||ch==KEY_UP||ch==KEY_DOWN) main_object.Main_Graphic_Draw(ch);
+        if(TUI_Main_Screen_Draw::temp_menu!=std::nullopt && ch==ENTER){
+            const TUI_Main_Screen_Draw temp_object(*TUI_Main_Screen_Draw::temp_menu);
+            main_object = temp_object;
+            TUI_Main_Screen_Draw::temp_menu = std::nullopt; screen_size_state = false;
+        }else if(!TUI_Main_Screen_Draw::menu_chain.empty() && ch==KEY_LEFT){
+            const TUI_Main_Screen_Draw temp_object(TUI_Main_Screen_Draw::menu_chain.top());
+            main_object = temp_object;
+            TUI_Main_Screen_Draw::menu_chain.pop(); screen_size_state = false;
+        }
     }
     endwin();
 }
 
-int main(){
-    Terminal_Screen_Event_Main_Cycle();
-}
+
+// ===== Test =====
+// int main(){
+//     TUI_Main_Event_Cycle();
+// }

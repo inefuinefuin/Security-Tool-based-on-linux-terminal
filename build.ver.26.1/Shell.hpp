@@ -1,14 +1,15 @@
 #pragma once
 #include "GeneralFileOper.hpp"
+
 #include <iostream>
 #include <sstream>
 #include <map>
 #include <vector>
 #include <string>
-#include <fmt/core.h>
 #include <filesystem>
 #include <functional>
 
+#include <fmt/core.h>
 
 constexpr std::string_view StateCode[] = {
     "Error: Invalid Command",
@@ -44,22 +45,6 @@ namespace Terminal_IO{
         while (ss>>deInStr) CmdSet.push_back(deInStr);
         return CmdSet;
     }
-    // inline std::pair<std::filesystem::path,std::error_code> File_Path_Correct_TryMake(const std::filesystem::path pwd,const std::filesystem::path raw_path) {
-    //     std::filesystem::path target;
-    //     if (raw_path.is_absolute()) target = raw_path;
-    //     else target = pwd/raw_path;
-    //     std::error_code ec;
-    //     target = std::filesystem::weakly_canonical(target,ec);
-    //     return std::pair{target,ec};
-    // }
-    // inline std::optional<std::filesystem::path> File_Path_Correct_Make(const std::wstring source_path){
-    // try{
-    //     std::filesystem::path initial(source);
-    //     std::filesystem::path target = std::filesystem::canonical(initial);
-    //     return target;
-    // }catch(std::filesystem::filesystem_error& e){
-    //     return std::nullopt;
-    // }
 }
 
 class Shell{
@@ -266,10 +251,19 @@ inline void Shell::Func_exit(std::filesystem::path&,std::vector<std::string> vec
 }
 
 
+// ===== Simply Shell Interface =====
 inline void Terminal_Shell_Interface(std::filesystem::path target_path) {
     Shell sh(target_path);
     sh.shell();
 }
+
+// ===== System Shell Interface =====
+inline void System_Shell_Interface(std::filesystem::path target_path) {
+     std::string cmd = "bash -c 'bash --rcfile <(echo '\"'\"'PS1=\"\\e[35m\\w\\e[0m\\e[33m$\\e[0m \"'\"'\"') -i'";
+    cmd = "cd \"" + target_path.string() + "\" && " + cmd;
+    system(cmd.data());
+}
+
 // int main(){
 //     Terminal_Shell_Interface(std::filesystem::current_path());
 // }
