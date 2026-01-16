@@ -34,7 +34,8 @@ bash: sudo apt-get install libncursesw5-dev libsodium-dev libfmt-dev
 
 
 ### 編譯指令
-g++-12 -std=c++20 TUI.cpp TuiFileManager.hpp Shell.hpp Core.hpp GeneralFileOper.hpp -lncursesw -lfmt -lsodium -o SecuryTool
+原始文件壓縮包內編譯: g++-12 -std=c++20 TUI.cpp TuiFileManager.hpp Shell.hpp Core.hpp GeneralFileOper.hpp -lncursesw -lfmt -lsodium -o SecuryTool
+更新中的文件編譯 未來將採用: g++-12 -std=c++20 Program.cpp TUI.hpp -lfmt -lncursesw -lsodium -o SecurityTool
 
 ## 📖 使用指南 (Usage Guide)
 ### 1. 內置 Shell 模式
