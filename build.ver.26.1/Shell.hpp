@@ -363,26 +363,27 @@ class ListCommand: public ShellCommand {
     }
     
     Result core(const std::filesystem::path& pwd, const std::vector<std::string>& args) override {
-        // if(args.empty()) {
-        //     auto Entries = File_Folder_List_Info(std::filesystem::current_path());
-        //     show_plain(Entries);
-        //     return Result(ShellStatus::Success)
-        // }
-        // else{
-        //     auto result = para_parse(args);
-        //     if(result.is_err()) return Result(result.error());
-        //     if(auto [paras,paths] = result.unwrap(); paras.empty()){
-        //         if(paths.size()!=1) retrun Result(ShellStatus::WrongArguments);
+        //wait ... 
+        if(args.empty()) {
+            auto Entries = File_Folder_List_Info(std::filesystem::current_path());
+            show_plain(Entries);
+            return Result(ShellStatus::Success)
+        }
+        else{
+            auto result = para_parse(args);
+            if(result.is_err()) return Result(result.error());
+            if(auto [paras,paths] = result.unwrap(); paras.empty()){
+                if(paths.size()!=1) retrun Result(ShellStatus::WrongArguments);
                 
-        //         std::filesystem::path try_path(paths[0]);
-        //         auto [path,ec] = File_RelativePath_To_AbsPath_Abs(pwd,try_path);
-        //         if(ec!=0) return Result(ShellStatus::WrongArguments);
+                std::filesystem::path try_path(paths[0]);
+                auto [path,ec] = File_RelativePath_To_AbsPath_Abs(pwd,try_path);
+                if(ec!=0) return Result(ShellStatus::WrongArguments);
                 
-        //         auto Entries = File_Folder_List_Info(path);
-        //         show_plain(Entries);
-        //         return Result(ShellStatus::Success);
-        //     }
-        // }
+                auto Entries = File_Folder_List_Info(path);
+                show_plain(Entries);
+                return Result(ShellStatus::Success);
+            }
+        }
     }
 
     bool validate_args(const std::vector<std::string>& args) const override {
