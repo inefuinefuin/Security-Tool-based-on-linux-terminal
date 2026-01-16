@@ -21,7 +21,10 @@ inline void File_Vim_TextCompiler(const std::filesystem::path target_file) {
     std::string cmd = "vim -n "+target_file.string();
     system(cmd.data());
 }
-
+inline bool File_Create_SFBoolStatus(const std::filessytem::path target_path){
+    if(!std::filesystem::exists(target_path)) return false;
+    return true;
+}
 // ===== File/Folder Creation =====
 // Create empty file if not exists
 // Create folder recursively if not exists
